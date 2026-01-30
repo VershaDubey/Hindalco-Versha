@@ -250,38 +250,38 @@ router.post("/", async (req, res) => {
       const feedbackText = (extracted_feedback || comment || extracted.comment || payload.feedback || "").toString() || "No suggestions";
       const contactNumber = process.env.CONTACT_NUMBER || "1800-123-456";
 
-      const whatsappPayload = {
-        messaging_product: "whatsapp",
-        to: "91" + whatsappMobile,
-        type: "template",
-        template: {
-          name: process.env.WHATSAPP_TEMPLATE_NAME || "gb_feedback_thankyou",
-          language: { code: "en" },
-          components: [
-            {
-              type: "body",
-              parameters: [
-                { type: "text", text: `${ratingValue}/5` },       // placeholder 1 -> rating
-                { type: "text", text: feedbackText },            // placeholder 2 -> suggestions/feedback
-                { type: "text", text: contactNumber },          // placeholder 3 -> contact number
-              ],
-            },
-          ],
-        },
-      };
+      // const whatsappPayload = {
+      //   messaging_product: "whatsapp",
+      //   to: "91" + whatsappMobile,
+      //   type: "template",
+      //   template: {
+      //     name: process.env.WHATSAPP_TEMPLATE_NAME || "gb_feedback_thankyou",
+      //     language: { code: "en" },
+      //     components: [
+      //       {
+      //         type: "body",
+      //         parameters: [
+      //           { type: "text", text: `${ratingValue}/5` },       // placeholder 1 -> rating
+      //           { type: "text", text: feedbackText },            // placeholder 2 -> suggestions/feedback
+      //           { type: "text", text: contactNumber },          // placeholder 3 -> contact number
+      //         ],
+      //       },
+      //     ],
+      //   },
+      // };
 
-      const whatsappResponse = await axios.post(
-        "https://graph.facebook.com/v22.0/475003915704924/messages",
-        whatsappPayload,
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-            "Content-Type": "application/json",
-            "Accept-Encoding": "identity",
-          },
-          httpsAgent: agent,
-        }
-      );
+      // const whatsappResponse = await axios.post(
+      //   "https://graph.facebook.com/v22.0/475003915704924/messages",
+      //   whatsappPayload,
+      //   {
+      //     headers: {
+      //       Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+      //       "Content-Type": "application/json",
+      //       "Accept-Encoding": "identity",
+      //     },
+      //     httpsAgent: agent,
+      //   }
+      // );
       console.log("✅ WhatsApp response:", whatsappResponse.data);
     } catch (waErr) {
       console.warn("⚠️ WhatsApp send failed:", waErr?.response?.data || waErr.message || waErr);
