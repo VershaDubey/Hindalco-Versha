@@ -183,45 +183,64 @@ router.post("/", async (req, res) => {
       }
     );
 
-    /* ===========================
-       ✅ WHATSAPP TEMPLATE SEND
-       (AS PER GIVEN CURL)
-       =========================== */
-    try {
-      const whatsappPayload = {
-        messaging_product: "whatsapp",
-        to: "91" + cleanedMobile,
-        type: "template",
-        template: {
-          name: "sevicd_demo_12",
-          language: {
-            code: "en",
-          },
-          components: [
-            {
-              type: "body",
-              parameters: [
-                {
-                  type: "text",
-                  text: `Rate ${extracted_rate || rating || "N/A"}`,
-                },
-              ],
-            },
-          ],
-        },
-      };
+   /* ===========================
+   ✅ WHATSAPP TEMPLATE SEND (FIXED)
+   =========================== */
+try {
+  const userNumber =
+    req.body.user_number ||
+    req.body?.telephony_data?.from_number ||
+    "";
 
-      const whatsappResponse = await axios.post(
-        "https://graph.facebook.com/v21.0/475003915704924/messages",
-        whatsappPayload,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+  const ratingValue = extracted_rate || rating;
+
+  // ✅ Send WhatsApp ONLY when rating exists
+  if (userNumber && ratingValue) {
+    const whatsappPayload = {
+      messaging_product: "whatsapp",
+      to: userNumber.replace("+", ""), // remove +
+      type: "template",
+      template: {
+        name: "sevicd_demo_12",
+        language: { code: "en" },
+        components: [
+          {
+            type: "body",
+            parameters: [
+              {
+                type: "text",
+                text: String(ratingValue), // ✅ ONLY VALUE
+              },
+            ],
           },
-          httpsAgent: agent,
-        }
-      );
+        ],
+      },
+    };
+
+    const whatsappResponse = await axios.post(
+      "https://graph.facebook.com/v21.0/475003915704924/messages",
+      whatsappPayload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+        },
+        httpsAgent: agent,
+      }
+    );
+
+    console.log("✅ WhatsApp delivered payload:", whatsappResponse.data);
+  } else {
+    console.log("ℹ️ WhatsApp skipped (rating/user not available yet)");
+  }
+} catch (waErr) {
+  console.warn(
+    "⚠️ WhatsApp send failed:",
+    waErr?.response?.data || waErr.message
+  );
+}
+
+
 
       console.log("✅ WhatsApp sent successfully:", whatsappResponse.data);
     } catch (waErr) {
