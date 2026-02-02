@@ -186,76 +186,67 @@ router.post("/", async (req, res) => {
     /* ===========================
        ✅ WHATSAPP TEMPLATE SEND (FIXED NUMBER HANDLING)
        =========================== */
-    try {
-      // Prefer cleanedMobile (extracted), then req.body.user_number, then telephony_data.from_number
-      const possibleSources = [
-        cleanedMobile,
-        req.body.user_number,
-        telephoneData?.from_number,
-        req.body?.user_number,
-        req.body?.telephony_data?.from_number,
-      ];
-      // take first non-empty
-      let target = possibleSources.find((s) => s && String(s).trim()) || "";
+   /* ===========================
+   ✅ WHATSAPP TEMPLATE SEND (FINAL FIX)
+   =========================== */
+try {
+  if (req.body.status !== "completed") {
+    console.log("ℹ️ WhatsApp skipped: call not completed yet");
+  } else {
+    let target =
+      cleanedMobile ||
+      req.body.user_number ||
+      telephoneData?.to_number ||
+      "";
 
-      // normalize to digits only
-      target = String(target).replace(/[^0-9]/g, "");
+    target = String(target).replace(/[^0-9]/g, "");
+    if (target.length === 10) target = "91" + target;
 
-      // if result is 10 digits (likely local Indian), prefix 91
-      if (target.length === 10) {
-        target = "91" + target;
-      }
+    const ratingValue = extracted_rate || rating;
 
-      // if target is still empty, skip send
-      if (!target) {
-        console.log("ℹ️ WhatsApp skipped: no target phone number available");
-      } else {
-        // Choose rating value (or fallback to "N/A")
-        const ratingValue = extracted_rate || rating || "N/A";
-
-        const whatsappPayload = {
-          messaging_product: "whatsapp",
-          to: target, // numeric E.164 without +
-          type: "template",
-          template: {
-            name: "sevicd_demo_12",
-            language: {
-              code: "en",
+    if (!target || !ratingValue) {
+      console.log("ℹ️ WhatsApp skipped: missing phone or rating");
+    } else {
+      const whatsappPayload = {
+        messaging_product: "whatsapp",
+        to: target,
+        type: "template",
+        template: {
+          name: "sevicd_demo_12",
+          language: { code: "en" },
+          components: [
+            {
+              type: "body",
+              parameters: [
+                {
+                  type: "text",
+                  text: String(ratingValue),
+                },
+              ],
             },
-            components: [
-              {
-                type: "body",
-                parameters: [
-                  {
-                    type: "text",
-                    text: String(ratingValue),
-                  },
-                ],
-              },
-            ],
+          ],
+        },
+      };
+
+      const whatsappResponse = await axios.post(
+        "https://graph.facebook.com/v21.0/475003915704924/messages",
+        whatsappPayload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
           },
-        };
-
-        const whatsappResponse = await axios.post(
-          "https://graph.facebook.com/v21.0/475003915704924/messages",
-          whatsappPayload,
-          {
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-            },
-            httpsAgent: agent,
-          }
-        );
-
-        console.log("✅ WhatsApp sent successfully:", whatsappResponse.data);
-      }
-    } catch (waErr) {
-      console.warn(
-        "⚠️ WhatsApp send failed:",
-        waErr?.response?.data || waErr.message
+          httpsAgent: agent,
+        }
       );
+
+      console.log("✅ WhatsApp accepted by Meta:", whatsappResponse.data);
     }
+  }
+} catch (waErr) {
+  console.warn("⚠️ WhatsApp error:", waErr?.response?.data || waErr.message);
+}
+
 
     res.status(200).json({
       success: true,
