@@ -183,12 +183,7 @@ router.post("/", async (req, res) => {
       }
     );
 
-    /* ===========================
-       ✅ WHATSAPP TEMPLATE SEND (FIXED NUMBER HANDLING)
-       =========================== */
-   /* ===========================
-   ✅ WHATSAPP TEMPLATE SEND (FINAL FIX)
-   =========================== */
+ //whatsapp
 try {
   if (req.body.status !== "completed") {
     console.log("ℹ️ WhatsApp skipped: call not completed yet");
