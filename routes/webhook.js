@@ -277,7 +277,18 @@ router.post("/", async (req, res) => {
         callStatus === "call_ended" ||
         callStatus === "ended" ||
         callStatus === "done";
-
+ console.log("============ EMAIL DEBUG ============");
+  console.log("rawEmail:", rawEmail);
+  console.log("email (after spokenToEmail):", email);
+  console.log("finalEmail:", finalEmail);
+  console.log("callStatus:", callStatus);
+  console.log("callWasCompleted:", callWasCompleted);
+  console.log("callWasMissed:", callWasMissed);
+  console.log("finalEmail has @:", finalEmail?.includes("@"));
+  console.log("RESEND_API_KEY set:", !!process.env.RESEND_API_KEY);
+  console.log("RESEND_API_KEY starts with re_:", process.env.RESEND_API_KEY?.startsWith("re_"));
+  console.log("=====================================");
+  // ─
       const callWasMissed =
         ["no-answer", "missed", "busy", "failed", "no_answer", "not-answered"].includes(callStatus);
 
