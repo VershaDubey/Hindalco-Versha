@@ -1,4 +1,3 @@
-// routes/webhook.js
 const express = require("express");
 const router = express.Router();
 const axios = require("axios");
@@ -72,6 +71,20 @@ function cleanMobile(mobile) {
   return numeric.slice(-10);
 }
 
+// ─── Smart Email Parser ───────────────────────────────────────────────────────
+function isAlreadyValidEmail(str) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
+}
+
+function resolveEmail(rawEmail, spokenToEmailFn) {
+  if (!rawEmail) return "";
+  const trimmed = rawEmail.trim();
+  if (isAlreadyValidEmail(trimmed)) {
+    return trimmed.toLowerCase();
+  }
+  return spokenToEmailFn(trimmed);
+}
+
 // ─── Salesforce Token ─────────────────────────────────────────────────────────
 async function getSalesforceToken() {
   const params = new URLSearchParams({
@@ -98,10 +111,19 @@ router.post("/", async (req, res) => {
   try {
     console.log("📦 Webhook received payload:", JSON.stringify(req.body, null, 2));
 
+    // ── Debug log — check these values first if email is not working ──────────
+    console.log("🔍 DEBUG →", {
+      status: req.body.status,
+      rawEmail: req.body.extracted_data?.email,
+      mobile: req.body.extracted_data?.mobile,
+      rating: req.body.extracted_data?.rate || req.body.extracted_data?.rating,
+    });
+
     const extracted = req.body.extracted_data || {};
     const telephoneData = req.body.telephony_data || {};
     const transcriptedData = req.body.transcript || "";
-    const callStatus = req.body.status || "";
+    const callStatus = (req.body.status || "").trim().toLowerCase();
+
     let conversationDurationSeconds =
       req.body.conversation_duration || req.body.conversationDueration || null;
 
@@ -123,7 +145,9 @@ router.post("/", async (req, res) => {
       email: rawEmail,
     } = extracted;
 
-    const email = spokenToEmail(rawEmail || "");
+    // Smart email resolution — handles both clean and spoken email formats
+    const email = resolveEmail(rawEmail || "", spokenToEmail);
+
     const cleanedMobile = cleanMobile(mobile || "");
     const conversationDueration = formatDuration(conversationDurationSeconds);
     const issueDesc = issuedesc || "";
@@ -246,11 +270,26 @@ router.post("/", async (req, res) => {
       const GOOGLE_FORM_LINK =
         process.env.FEEDBACK_FORM_URL || "https://forms.gle/MDPrTCxTwgDNLqjGA";
 
-      const callWasCompleted = callStatus === "completed";
-      const callWasMissed = ["no-answer", "missed", "busy", "failed"].includes(callStatus);
+      // Broad status matching — covers all common telephony provider values
+      const callWasCompleted =
+        callStatus === "completed" ||
+        callStatus === "end-of-call-report" ||
+        callStatus === "call_ended" ||
+        callStatus === "ended" ||
+        callStatus === "done";
+
+      const callWasMissed =
+        ["no-answer", "missed", "busy", "failed", "no_answer", "not-answered"].includes(callStatus);
+
+      console.log("📧 Email decision →", {
+        email,
+        callStatus,
+        callWasCompleted,
+        callWasMissed,
+      });
 
       if (!email || !email.includes("@")) {
-        console.log("ℹ️ Email skipped: no valid email found →", email);
+        console.log("ℹ️ Email skipped: no valid email →", email);
 
       } else if (callWasMissed) {
         // ── Missed call → "We tried reaching you" ──────────────────────────────
@@ -261,7 +300,7 @@ router.post("/", async (req, res) => {
             <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px;border:1px solid #eee;border-radius:8px;">
               <h2 style="color:#333;">We tried reaching you 📞</h2>
               <p>Dear <strong>${user_name || "Customer"}</strong>,</p>
-              <p>We recently tried to contact you to collect feedback about your recent service experience, but were unable to connect.</p>
+              <p>We recently tried to contact you regarding your experience with Hindalco, but were unable to connect.</p>
               <p>If you have 2 minutes, we'd really appreciate your thoughts:</p>
               <p style="text-align:center;margin:32px 0;">
                 <a href="${GOOGLE_FORM_LINK}"
@@ -274,7 +313,7 @@ router.post("/", async (req, res) => {
                 <a href="${GOOGLE_FORM_LINK}">${GOOGLE_FORM_LINK}</a>
               </p>
               <hr style="border:none;border-top:1px solid #eee;margin:24px 0;"/>
-              <p style="color:#aaa;font-size:12px;">Thank you for your time. – Customer Support Team</p>
+              <p style="color:#aaa;font-size:12px;">– Hindalco Mission Happiness Team</p>
             </div>
           `,
         });
@@ -290,13 +329,13 @@ router.post("/", async (req, res) => {
           subject: "Thank you for your feedback! 🙏",
           html: `
             <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px;border:1px solid #eee;border-radius:8px;">
-              <h2 style="color:#28a745;">Thank you for your feedback! 🙏</h2>
+              <h2 style="color:#C8202D;">Thank you for your feedback! 🙏</h2>
               <p>Dear <strong>${user_name || "Customer"}</strong>,</p>
-              <p>We appreciate you taking the time to share your experience. Here's a summary:</p>
+              <p>We appreciate you taking the time to share your experience with Hindalco. Here's a summary:</p>
               <table style="width:100%;border-collapse:collapse;margin:16px 0;">
                 <tr style="background:#f8f9fa;">
                   <td style="padding:10px;border:1px solid #dee2e6;font-weight:bold;width:40%;">Rating</td>
-                  <td style="padding:10px;border:1px solid #dee2e6;">${ratingValue} / 5</td>
+                  <td style="padding:10px;border:1px solid #dee2e6;">${ratingValue} / 10</td>
                 </tr>
                 <tr>
                   <td style="padding:10px;border:1px solid #dee2e6;font-weight:bold;">Sentiment</td>
@@ -319,24 +358,24 @@ router.post("/", async (req, res) => {
                 <a href="${GOOGLE_FORM_LINK}">${GOOGLE_FORM_LINK}</a>
               </p>
               <hr style="border:none;border-top:1px solid #eee;margin:24px 0;"/>
-              <p style="color:#aaa;font-size:12px;">– Customer Support Team</p>
+              <p style="color:#aaa;font-size:12px;">– Hindalco Mission Happiness Team</p>
             </div>
           `,
         });
         console.log("✅ Completed-call email sent to:", email);
 
       } else {
-        console.log("ℹ️ Email skipped: unrecognized status →", callStatus);
+        console.log("ℹ️ Email skipped: status did not match any known value →", callStatus);
       }
 
     } catch (mailErr) {
-      console.warn("⚠️ Email error:", mailErr?.message || mailErr);
+      console.error("❌ Email block error:", mailErr?.message || mailErr);
     }
     // ───────────────────────────────────────────────────────────────────────────
 
     res.status(200).json({
       success: true,
-      message: "Salesforce Case created, WhatsApp & Email sent",
+      message: "Salesforce Case created, WhatsApp & Email processed",
       salesforceResponse: sfResponse.data,
     });
 
