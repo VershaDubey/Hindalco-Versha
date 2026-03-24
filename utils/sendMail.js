@@ -7,16 +7,15 @@ dns.setDefaultResultOrder("ipv4first");
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 587,
-  secure: false, // TLS
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-  tls: {
-    rejectUnauthorized: false,
-  },
-  family: 4, // 🔥 force IPv4 (important)
-  connectionTimeout: 10000, // 10 sec
+  family: 4, // force IPv4
+  connectionTimeout: 5000,
+  greetingTimeout: 5000,
+  socketTimeout: 5000,
 });
 
 async function sendMail({ to, subject, html, userName, rating }) {
