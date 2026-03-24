@@ -25,7 +25,7 @@ app.get("/test-mail", async (req, res) => {
     const sendMail = require("./utils/sendMail");
 
     await sendMail({
-      to: "your-real-email@gmail.com",
+      to: "dhilliwalpooja80@gmail.com",
       subject: "Test Email ✅",
       html: "<h1>Email working 🚀</h1>",
     });
