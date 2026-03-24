@@ -20,6 +20,21 @@ app.get("/ping", (req, res) => {
     time: new Date().toLocaleString(),
   });
 });
+app.get("/test-mail", async (req, res) => {
+  try {
+    const sendMail = require("./utils/sendMail");
+
+    await sendMail({
+      to: "your-real-email@gmail.com",
+      subject: "Test Email ✅",
+      html: "<h1>Email working 🚀</h1>",
+    });
+
+    res.send("✅ Email sent successfully");
+  } catch (err) {
+    res.status(500).send("❌ " + err.message);
+  }
+});
 
 // Routes
 app.use("/mail", require("./routes/mail"));

@@ -266,122 +266,64 @@ router.post("/", async (req, res) => {
     }
 
     // ─── EMAIL ──────────────────────────────────────────────────────────────────
-    try {
-      const GOOGLE_FORM_LINK =
-        process.env.FEEDBACK_FORM_URL || "https://forms.gle/MDPrTCxTwgDNLqjGA";
+    // ─── EMAIL ─────────────────────────────────────────────────────────────
+try {
+  const GOOGLE_FORM_LINK =
+    process.env.FEEDBACK_FORM_URL || "https://forms.gle/MDPrTCxTwgDNLqjGA";
 
-      // Broad status matching — covers all common telephony provider values
-      const callWasCompleted =
-        callStatus === "completed" ||
-        callStatus === "end-of-call-report" ||
-        callStatus === "call_ended" ||
-        callStatus === "ended" ||
-        callStatus === "done";
- console.log("============ EMAIL DEBUG ============");
-  console.log("rawEmail:", rawEmail);
-  console.log("email (after spokenToEmail):", email);
-  console.log("finalEmail:", finalEmail);
-  console.log("callStatus:", callStatus);
-  console.log("callWasCompleted:", callWasCompleted);
-  console.log("callWasMissed:", callWasMissed);
-  console.log("finalEmail has @:", finalEmail?.includes("@"));
-  console.log("RESEND_API_KEY set:", !!process.env.RESEND_API_KEY);
-  console.log("RESEND_API_KEY starts with re_:", process.env.RESEND_API_KEY?.startsWith("re_"));
-  console.log("=====================================");
-  // ─
-      const callWasMissed =
-        ["no-answer", "missed", "busy", "failed", "no_answer", "not-answered"].includes(callStatus);
+  const callWasCompleted =
+    ["completed", "end-of-call-report", "call_ended", "ended", "done"].includes(callStatus);
 
-      console.log("📧 Email decision →", {
-        email,
-        callStatus,
-        callWasCompleted,
-        callWasMissed,
-      });
+  const callWasMissed =
+    ["no-answer", "missed", "busy", "failed", "no_answer", "not-answered"].includes(callStatus);
 
-      if (!email || !email.includes("@")) {
-        console.log("ℹ️ Email skipped: no valid email →", email);
+  console.log("📧 Email Debug →", {
+    email,
+    callStatus,
+    callWasCompleted,
+    callWasMissed,
+  });
 
-      } else if (callWasMissed) {
-        // ── Missed call → "We tried reaching you" ──────────────────────────────
-        await sendMail({
-          to: email,
-          subject: "We tried reaching you – Quick Feedback Request",
-          html: `
-            <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px;border:1px solid #eee;border-radius:8px;">
-              <h2 style="color:#333;">We tried reaching you 📞</h2>
-              <p>Dear <strong>${user_name || "Customer"}</strong>,</p>
-              <p>We recently tried to contact you regarding your experience with Hindalco, but were unable to connect.</p>
-              <p>If you have 2 minutes, we'd really appreciate your thoughts:</p>
-              <p style="text-align:center;margin:32px 0;">
-                <a href="${GOOGLE_FORM_LINK}"
-                   style="background:#007bff;color:#ffffff;padding:12px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:bold;">
-                  📝 Fill Feedback Form
-                </a>
-              </p>
-              <p style="color:#888;font-size:13px;">
-                If the button doesn't work, copy this link:<br/>
-                <a href="${GOOGLE_FORM_LINK}">${GOOGLE_FORM_LINK}</a>
-              </p>
-              <hr style="border:none;border-top:1px solid #eee;margin:24px 0;"/>
-              <p style="color:#aaa;font-size:12px;">– Hindalco Mission Happiness Team</p>
-            </div>
-          `,
-        });
-        console.log("✅ Missed-call email sent to:", email);
+  if (!email || !email.includes("@")) {
+    console.log("❌ Invalid email, skipping:", email);
+  }
 
-      } else if (callWasCompleted) {
-        // ── Completed call → Thank you + summary + form link ───────────────────
-        const ratingValue = extracted_rate || rating || "N/A";
-        const feedbackText = extracted_feedback || comment || "None";
+  else if (callWasMissed) {
+    await sendMail({
+      to: email,
+      subject: "We tried reaching you 📞",
+      html: `<h2>Missed Call</h2>
+             <p>Please fill feedback:</p>
+             <a href="${GOOGLE_FORM_LINK}">Click Here</a>`,
+    });
 
-        await sendMail({
-          to: email,
-          subject: "Thank you for your feedback! 🙏",
-          html: `
-            <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px;border:1px solid #eee;border-radius:8px;">
-              <h2 style="color:#C8202D;">Thank you for your feedback! 🙏</h2>
-              <p>Dear <strong>${user_name || "Customer"}</strong>,</p>
-              <p>We appreciate you taking the time to share your experience with Hindalco. Here's a summary:</p>
-              <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-                <tr style="background:#f8f9fa;">
-                  <td style="padding:10px;border:1px solid #dee2e6;font-weight:bold;width:40%;">Rating</td>
-                  <td style="padding:10px;border:1px solid #dee2e6;">${ratingValue} / 10</td>
-                </tr>
-                <tr>
-                  <td style="padding:10px;border:1px solid #dee2e6;font-weight:bold;">Sentiment</td>
-                  <td style="padding:10px;border:1px solid #dee2e6;">${sentiment}</td>
-                </tr>
-                <tr style="background:#f8f9fa;">
-                  <td style="padding:10px;border:1px solid #dee2e6;font-weight:bold;">Your Comments</td>
-                  <td style="padding:10px;border:1px solid #dee2e6;">${feedbackText}</td>
-                </tr>
-              </table>
-              <p>Would you like to share more? Please fill our feedback form:</p>
-              <p style="text-align:center;margin:32px 0;">
-                <a href="${GOOGLE_FORM_LINK}"
-                   style="background:#28a745;color:#ffffff;padding:12px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:bold;">
-                  📝 Share More Feedback
-                </a>
-              </p>
-              <p style="color:#888;font-size:13px;">
-                If the button doesn't work, copy this link:<br/>
-                <a href="${GOOGLE_FORM_LINK}">${GOOGLE_FORM_LINK}</a>
-              </p>
-              <hr style="border:none;border-top:1px solid #eee;margin:24px 0;"/>
-              <p style="color:#aaa;font-size:12px;">– Hindalco Mission Happiness Team</p>
-            </div>
-          `,
-        });
-        console.log("✅ Completed-call email sent to:", email);
+    console.log("✅ Missed-call email sent");
+  }
 
-      } else {
-        console.log("ℹ️ Email skipped: status did not match any known value →", callStatus);
-      }
+  else if (callWasCompleted) {
+    await sendMail({
+      to: email,
+      subject: "Thank you for your feedback 🙏",
+      html: `<h2>Thanks ${user_name || "Customer"}</h2>
+             <p>We appreciate your feedback.</p>
+             <a href="${GOOGLE_FORM_LINK}">Give More Feedback</a>`,
+    });
 
-    } catch (mailErr) {
-      console.error("❌ Email block error:", mailErr?.message || mailErr);
-    }
+    console.log("✅ Completed-call email sent");
+  }
+
+  else {
+    console.log("ℹ️ Email skipped due to status:", callStatus);
+  }
+
+} catch (mailErr) {
+  console.error("❌ Email ERROR:", mailErr.message);
+
+  return res.status(500).json({
+    success: false,
+    error: "Email sending failed",
+  });
+}
     // ───────────────────────────────────────────────────────────────────────────
 
     res.status(200).json({
