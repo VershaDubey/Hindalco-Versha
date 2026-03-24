@@ -11,7 +11,7 @@ async function sendMail({ to, subject, html }) {
     console.log("📧 Sending email →", to);
 
     const { data, error } = await resend.emails.send({
-      from: "Support <onboarding@resend.dev>", // ✅ correct
+      from: "Support <onboarding@resend.dev>", // test sender
       to: Array.isArray(to) ? to : [to],
       subject,
       html,

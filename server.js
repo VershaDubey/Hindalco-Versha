@@ -12,7 +12,7 @@ app.get("/ping", (req, res) => {
   res.json({ success: true, message: "Server running ✅" });
 });
 
-// webhook route
+// webhook
 app.use("/webhook", require("./routes/webhook"));
 
 const PORT = process.env.PORT || 5001;
