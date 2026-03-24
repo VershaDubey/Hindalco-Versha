@@ -49,7 +49,7 @@ router.post("/", async (req, res) => {
 
         <p>
           We’ve recorded your rating of 
-          <strong>${rating}/5</strong> and truly appreciate your inputs.
+          <strong>${rating}/10</strong> and truly appreciate your inputs.
         </p>
 
         <p>
