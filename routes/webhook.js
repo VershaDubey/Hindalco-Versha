@@ -1,150 +1,67 @@
 const express = require("express");
 const router = express.Router();
-const axios = require("axios");
 const sendMail = require("../utils/sendMail");
-const spokenToEmail = require("../utils/spokenToEmail");
-const https = require("https");
-const agent = new https.Agent({ rejectUnauthorized: false });
-const OpenAI = require("openai");
-require("dotenv").config();
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-// ─── HELPERS ─────────────────────────────────────────
-
-function cleanMobile(mobile) {
-  if (!mobile) return "";
-  const numeric = String(mobile).replace(/[^0-9]/g, "");
-  return numeric.slice(-10);
+// simple email validation
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
-
-function resolveEmail(rawEmail, spokenToEmailFn) {
-  if (!rawEmail) return "";
-  const trimmed = rawEmail.trim();
-  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-    return trimmed.toLowerCase();
-  }
-  return spokenToEmailFn(trimmed);
-}
-
-// ─── SALESFORCE TOKEN ───────────────────────────────
-
-async function getSalesforceToken() {
-  const qs = require("qs");
-
-  const data = qs.stringify({
-    grant_type: "password",
-    client_id: process.env.SALESFORCE_CLIENT_ID,
-    client_secret: process.env.SALESFORCE_CLIENT_SECRET,
-    username: process.env.SALESFORCE_USERNAME,
-    password: process.env.SALESFORCE_PASSWORD,
-  });
-
-  const resp = await axios.post(
-    "https://login.salesforce.com/services/oauth2/token",
-    data,
-    {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json",
-      },
-    }
-  );
-
-  console.log("✅ TOKEN SUCCESS:", resp.data);
-
-  return resp.data;
-}
-
-// ─── WEBHOOK ────────────────────────────────────────
 
 router.post("/", async (req, res) => {
   try {
-    const extracted = req.body.extracted_data || {};
-    const telephoneData = req.body.telephony_data || {};
+    console.log("📦 Webhook payload:", req.body);
+
     const callStatus = (req.body.status || "").toLowerCase();
+    const extracted = req.body.extracted_data || {};
 
-    const email = resolveEmail(extracted.email || "", spokenToEmail);
-    const cleanedMobile = cleanMobile(extracted.mobile || "");
+    const email = extracted.email;
+    const userName = extracted.user_name || "Customer";
 
-    const payload = {
-      subject: "Service Appointment",
-      operation: "insert",
-      user_name: extracted.user_name || "Web User",
-      email,
-      mobile: cleanedMobile,
-      issuedesc: extracted.issuedesc || "",
-      fulladdress: extracted.fulladdress || "",
-      recording_link: telephoneData?.recording_url || "",
-      origin: "Phone",
-      priority: "High",
-    };
+    console.log("📧 Debug:", { callStatus, email });
 
-    let sfResponse = null;
-
-    // ─── SALESFORCE (SAFE BLOCK) ─────────────────────
-    try {
-      const tokenData = await getSalesforceToken();
-
-      sfResponse = await axios.post(
-        `${tokenData.instance_url}/services/apexrest/caseService`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${tokenData.access_token}`,
-            "Content-Type": "application/json",
-          },
-          httpsAgent: agent,
-        }
-      );
-
-      console.log("✅ Salesforce success");
-
-    } catch (sfError) {
-      console.error("❌ Salesforce ERROR:", sfError.response?.data || sfError.message);
-    }
-
-    // ─── EMAIL (INDEPENDENT) ─────────────────────────
-    try {
-      console.log("📧 Email Debug:", { email, callStatus });
-
-      if (email && email.includes("@")) {
-        await sendMail({
-          to: "dhilliwalpooja80@gmail.com", // 🔥 keep fixed for testing
-          subject: "Test Email",
-          html: "<h2>Email working ✅</h2>",
-        });
-
-        console.log("✅ Email sent");
-      } else {
-        console.log("❌ Invalid email:", email);
-      }
-
-    } catch (mailErr) {
-      console.error("❌ Email ERROR:", mailErr.message);
-
-      return res.status(500).json({
-        success: false,
-        error: mailErr.message,
+    // ✅ Only send when call is completed
+    if (callStatus !== "completed") {
+      return res.json({
+        success: true,
+        message: "Call not completed, email skipped",
       });
     }
 
-    // ─── FINAL RESPONSE ─────────────────────────────
-    res.status(200).json({
-      success: true,
-      message: "Process completed",
-      salesforce: sfResponse ? "Success" : "Failed",
-      email: "Sent",
+    if (!isValidEmail(email)) {
+      return res.json({
+        success: false,
+        message: "Invalid email",
+      });
+    }
+
+    // ✅ SEND EMAIL
+    await sendMail({
+      to: email,
+      subject: "Thank you for your feedback 🙏",
+      html: `
+        <div style="font-family:Arial;">
+          <h2>Hi ${userName} 👋</h2>
+          <p>Thank you for your time on the call.</p>
+          <p>Please share your feedback:</p>
+          <a href="${process.env.FEEDBACK_FORM_URL}"
+             style="background:#28a745;color:#fff;padding:10px 20px;text-decoration:none;border-radius:5px;">
+             Give Feedback
+          </a>
+        </div>
+      `,
     });
 
-  } catch (error) {
-    console.error("❌ Webhook error:", error.response?.data || error.message);
+    res.json({
+      success: true,
+      message: "Email sent successfully",
+    });
+
+  } catch (err) {
+    console.error("❌ Webhook error:", err.message);
 
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: err.message,
     });
   }
 });

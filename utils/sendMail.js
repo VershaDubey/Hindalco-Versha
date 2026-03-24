@@ -4,29 +4,29 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 async function sendMail({ to, subject, html }) {
   if (!to || !subject || !html) {
-    throw new Error("Missing required fields: to, subject, html");
+    throw new Error("Missing required fields");
   }
 
   try {
     console.log("📧 Sending email →", to);
 
     const { data, error } = await resend.emails.send({
-   "email": "dhilliwalpooja80@gmail.com",
+      from: "Support <onboarding@resend.dev>", // ✅ correct
       to: Array.isArray(to) ? to : [to],
       subject,
       html,
     });
 
     if (error) {
-  console.error("❌ Resend error:", JSON.stringify(error, null, 2));
-  throw new Error(JSON.stringify(error));
-}
+      console.error("❌ Resend error:", error);
+      throw new Error(JSON.stringify(error));
+    }
 
     console.log("✅ Email sent:", data?.id);
     return data;
 
   } catch (err) {
-   console.error("❌ FULL ERROR:", JSON.stringify(err, null, 2));
+    console.error("❌ Mail failed:", err.message);
     throw err;
   }
 }
