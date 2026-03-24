@@ -43,8 +43,16 @@ async function getSalesforceToken() {
   const resp = await axios.post(
     "https://login.salesforce.com/services/oauth2/token",
     params.toString(),
-    { headers: { "Content-Type": "application/x-www-form-urlencoded" }, httpsAgent: agent }
+    {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json", // 🔥 ADD THIS
+      },
+      httpsAgent: agent,
+    }
   );
+
+  console.log("✅ TOKEN RESPONSE:", resp.data); // debug
 
   return resp.data;
 }
