@@ -37,7 +37,7 @@ async function getSalesforceToken() {
     client_id: process.env.SALESFORCE_CLIENT_ID,
     client_secret: process.env.SALESFORCE_CLIENT_SECRET,
     username: process.env.SALESFORCE_USERNAME,
-    password: process.env.SALESFORCE_PASSWORD,
+   password: "Crm@20263qiKUqK6wcO2UlYIBZVoyKHi2",
   });
 
   const resp = await axios.post(
@@ -53,7 +53,10 @@ async function getSalesforceToken() {
   );
 
   console.log("✅ TOKEN RESPONSE:", resp.data); // debug
-
+console.log("SF PARAMS:", {
+  username: process.env.SALESFORCE_USERNAME,
+  passwordLength: process.env.SALESFORCE_PASSWORD?.length,
+});
   return resp.data;
 }
 
