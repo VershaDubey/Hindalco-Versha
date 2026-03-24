@@ -1,47 +1,34 @@
-const nodemailer = require("nodemailer");
-const dns = require("dns");
+const SibApiV3Sdk = require("sib-api-v3-sdk");
 
-// ✅ force IPv4
-dns.setDefaultResultOrder("ipv4first");
+const client = SibApiV3Sdk.ApiClient.instance;
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  family: 4, // force IPv4
-  connectionTimeout: 5000,
-  greetingTimeout: 5000,
-  socketTimeout: 5000,
-});
+const apiKey = client.authentications["api-key"];
+apiKey.apiKey = process.env.BREVO_API_KEY;
+
+const tranEmailApi = new SibApiV3Sdk.TransactionalEmailsApi();
 
 async function sendMail({ to, subject, html, userName, rating }) {
   try {
     console.log("📧 Sending email →", to);
 
-    await transporter.sendMail({
-      from: `"Hindalco Support" <${process.env.EMAIL_USER}>`,
-      to,
-      subject,
-      html,
-
-      text: `Hi ${userName},
-      
-Rating: ${rating}/5
-      
-Thanks,
-Team Hindalco`,
-
-      replyTo: process.env.EMAIL_USER,
+    const response = await tranEmailApi.sendTransacEmail({
+      sender: {
+        email: process.env.EMAIL_USER,
+        name: "Hindalco Support",
+      },
+      to: [
+        {
+          email: to,
+        },
+      ],
+      subject: subject,
+      htmlContent: html,
     });
 
-    console.log("✅ Email sent");
+    console.log("✅ Email sent:", response.messageId);
 
   } catch (err) {
-    console.error("❌ Mail error:", err.message);
+    console.error("❌ Email error:", err.response?.body || err.message);
     throw err;
   }
 }
