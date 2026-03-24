@@ -12,80 +12,25 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// ─── Translate & Sentiment ────────────────────────────────────────────────────
-async function translateAndAnalyzeSentiment(transcript) {
-  try {
-    if (!transcript || transcript.trim() === "") {
-      return { translatedText: "", sentiment: "Neutral" };
-    }
+// ─── HELPERS ─────────────────────────────────────────
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content: `You are a helpful assistant that translates text to English and analyzes sentiment.
-          Respond ONLY in JSON:
-          {
-            "translatedText": "...",
-            "sentiment": "Positive/Negative/Neutral"
-          }`,
-        },
-        { role: "user", content: transcript },
-      ],
-      temperature: 0.3,
-      response_format: { type: "json_object" },
-    });
-
-    const result = JSON.parse(completion.choices[0].message.content);
-    return {
-      translatedText: result.translatedText || transcript,
-      sentiment: result.sentiment || "Neutral",
-    };
-  } catch (error) {
-    console.error("❌ Error in translation/sentiment:", error?.message || error);
-    return { translatedText: transcript, sentiment: "Neutral" };
-  }
-}
-
-// ─── Format Duration ──────────────────────────────────────────────────────────
-function formatDuration(seconds) {
-  if (seconds == null) return "0 sec";
-  const totalMilliseconds = Math.floor(Number(seconds) * 1000);
-  const minutes = Math.floor(totalMilliseconds / 60000);
-  const remainingAfterMinutes = totalMilliseconds % 60000;
-  const secs = Math.floor(remainingAfterMinutes / 1000);
-  const milliseconds = remainingAfterMinutes % 1000;
-  let result = "";
-  if (minutes > 0) result += `${minutes} min `;
-  if (secs > 0) result += `${secs} sec `;
-  if (milliseconds > 0) result += `${milliseconds} ms`;
-  return result.trim() || "0 sec";
-}
-
-// ─── Clean Mobile ─────────────────────────────────────────────────────────────
 function cleanMobile(mobile) {
   if (!mobile) return "";
   const numeric = String(mobile).replace(/[^0-9]/g, "");
-  if (numeric.length <= 10) return numeric;
   return numeric.slice(-10);
-}
-
-// ─── Smart Email Parser ───────────────────────────────────────────────────────
-function isAlreadyValidEmail(str) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
 }
 
 function resolveEmail(rawEmail, spokenToEmailFn) {
   if (!rawEmail) return "";
   const trimmed = rawEmail.trim();
-  if (isAlreadyValidEmail(trimmed)) {
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
     return trimmed.toLowerCase();
   }
   return spokenToEmailFn(trimmed);
 }
 
-// ─── Salesforce Token ─────────────────────────────────────────────────────────
+// ─── SALESFORCE TOKEN ───────────────────────────────
+
 async function getSalesforceToken() {
   const params = new URLSearchParams({
     grant_type: "password",
@@ -98,245 +43,99 @@ async function getSalesforceToken() {
   const resp = await axios.post(
     "https://login.salesforce.com/services/oauth2/token",
     params.toString(),
-    {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      httpsAgent: agent,
-    }
+    { headers: { "Content-Type": "application/x-www-form-urlencoded" }, httpsAgent: agent }
   );
+
   return resp.data;
 }
 
-// ─── Webhook POST ─────────────────────────────────────────────────────────────
+// ─── WEBHOOK ────────────────────────────────────────
+
 router.post("/", async (req, res) => {
   try {
-    console.log("📦 Webhook received payload:", JSON.stringify(req.body, null, 2));
-
-    // ── Debug log — check these values first if email is not working ──────────
-    console.log("🔍 DEBUG →", {
-      status: req.body.status,
-      rawEmail: req.body.extracted_data?.email,
-      mobile: req.body.extracted_data?.mobile,
-      rating: req.body.extracted_data?.rate || req.body.extracted_data?.rating,
-    });
-
     const extracted = req.body.extracted_data || {};
     const telephoneData = req.body.telephony_data || {};
-    const transcriptedData = req.body.transcript || "";
-    const callStatus = (req.body.status || "").trim().toLowerCase();
+    const callStatus = (req.body.status || "").toLowerCase();
 
-    let conversationDurationSeconds =
-      req.body.conversation_duration || req.body.conversationDueration || null;
-
-    if (!extracted || Object.keys(extracted).length === 0) {
-      return res.status(400).json({ error: "No extracted_data found in payload" });
-    }
-
-    let {
-      user_name,
-      mobile,
-      pincode,
-      technician_visit_date,
-      issuedesc,
-      fulladdress,
-      rate: extracted_rate,
-      rating,
-      feedback: extracted_feedback,
-      comment,
-      email: rawEmail,
-    } = extracted;
-
-    // Smart email resolution — handles both clean and spoken email formats
-    const email = resolveEmail(rawEmail || "", spokenToEmail);
-
-    const cleanedMobile = cleanMobile(mobile || "");
-    const conversationDueration = formatDuration(conversationDurationSeconds);
-    const issueDesc = issuedesc || "";
-    const fullAddress = fulladdress || "";
-    const recordingURL = telephoneData?.recording_url || "";
-
-    const { translatedText, sentiment } =
-      await translateAndAnalyzeSentiment(transcriptedData);
-
-    const classifyIssueType = (desc) => {
-      if (!desc) return "Service Appointment";
-      const serviceKeywords = ["not working", "repair", "issue", "problem"];
-      const complaintKeywords = ["complaint", "rude", "delay"];
-      const lower = desc.toLowerCase();
-      if (complaintKeywords.some((w) => lower.includes(w))) return "Complaint";
-      if (serviceKeywords.some((w) => lower.includes(w))) return "Service Appointment";
-      return "Service Appointment";
-    };
-
-    const caseType = classifyIssueType(issueDesc);
-
-    const tokenData = await getSalesforceToken();
-    const accessToken = tokenData.access_token;
-    const instanceUrl = tokenData.instance_url;
+    const email = resolveEmail(extracted.email || "", spokenToEmail);
+    const cleanedMobile = cleanMobile(extracted.mobile || "");
 
     const payload = {
-      subject: caseType,
+      subject: "Service Appointment",
       operation: "insert",
-      user_name: user_name || "Web User",
-      email: email,
+      user_name: extracted.user_name || "Web User",
+      email,
       mobile: cleanedMobile,
-      pincode: pincode || "",
-      preferred_date: technician_visit_date || "",
-      preferred_time: technician_visit_date || "",
-      issuedesc: issueDesc,
-      fulladdress: fullAddress,
-      recording_link: recordingURL,
-      transcript: translatedText || transcriptedData,
-      conversationDueration,
-      sentiment,
+      issuedesc: extracted.issuedesc || "",
+      fulladdress: extracted.fulladdress || "",
+      recording_link: telephoneData?.recording_url || "",
       origin: "Phone",
       priority: "High",
-      feedback: extracted_feedback || comment || "",
-      rate: extracted_rate || rating || "",
     };
 
-    const sfResponse = await axios.post(
-      `${instanceUrl}/services/apexrest/caseService`,
-      payload,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        httpsAgent: agent,
-      }
-    );
+    let sfResponse = null;
 
-    // ─── WHATSAPP ───────────────────────────────────────────────────────────────
+    // ─── SALESFORCE (SAFE BLOCK) ─────────────────────
     try {
-      if (callStatus !== "completed") {
-        console.log("ℹ️ WhatsApp skipped: call not completed. Status →", callStatus);
-      } else {
-        let target =
-          cleanedMobile ||
-          req.body.user_number ||
-          telephoneData?.to_number ||
-          "";
+      const tokenData = await getSalesforceToken();
 
-        target = String(target).replace(/[^0-9]/g, "");
-        if (target.length === 10) target = "91" + target;
-
-        const ratingValue = extracted_rate || rating;
-
-        if (!target || !ratingValue) {
-          console.log("ℹ️ WhatsApp skipped: missing phone or rating");
-        } else {
-          const whatsappPayload = {
-            messaging_product: "whatsapp",
-            to: target,
-            type: "template",
-            template: {
-              name: "sevicd_demo_12",
-              language: { code: "en" },
-              components: [
-                {
-                  type: "body",
-                  parameters: [
-                    {
-                      type: "text",
-                      text: String(ratingValue),
-                    },
-                  ],
-                },
-              ],
-            },
-          };
-
-          const whatsappResponse = await axios.post(
-            "https://graph.facebook.com/v21.0/475003915704924/messages",
-            whatsappPayload,
-            {
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-              },
-              httpsAgent: agent,
-            }
-          );
-
-          console.log("✅ WhatsApp accepted by Meta:", whatsappResponse.data);
+      sfResponse = await axios.post(
+        `${tokenData.instance_url}/services/apexrest/caseService`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${tokenData.access_token}`,
+            "Content-Type": "application/json",
+          },
+          httpsAgent: agent,
         }
-      }
-    } catch (waErr) {
-      console.warn("⚠️ WhatsApp error:", waErr?.response?.data || waErr.message);
+      );
+
+      console.log("✅ Salesforce success");
+
+    } catch (sfError) {
+      console.error("❌ Salesforce ERROR:", sfError.response?.data || sfError.message);
     }
 
-    // ─── EMAIL ──────────────────────────────────────────────────────────────────
-    // ─── EMAIL ─────────────────────────────────────────────────────────────
-try {
-  const GOOGLE_FORM_LINK =
-    process.env.FEEDBACK_FORM_URL || "https://forms.gle/MDPrTCxTwgDNLqjGA";
+    // ─── EMAIL (INDEPENDENT) ─────────────────────────
+    try {
+      console.log("📧 Email Debug:", { email, callStatus });
 
-  const callWasCompleted =
-    ["completed", "end-of-call-report", "call_ended", "ended", "done"].includes(callStatus);
+      if (email && email.includes("@")) {
+        await sendMail({
+          to: "dhilliwalpooja80@gmail.com", // 🔥 keep fixed for testing
+          subject: "Test Email",
+          html: "<h2>Email working ✅</h2>",
+        });
 
-  const callWasMissed =
-    ["no-answer", "missed", "busy", "failed", "no_answer", "not-answered"].includes(callStatus);
+        console.log("✅ Email sent");
+      } else {
+        console.log("❌ Invalid email:", email);
+      }
 
-  console.log("📧 Email Debug →", {
-    email,
-    callStatus,
-    callWasCompleted,
-    callWasMissed,
-  });
+    } catch (mailErr) {
+      console.error("❌ Email ERROR:", mailErr.message);
 
-  if (!email || !email.includes("@")) {
-    console.log("❌ Invalid email, skipping:", email);
-  }
+      return res.status(500).json({
+        success: false,
+        error: mailErr.message,
+      });
+    }
 
-  else if (callWasMissed) {
-    await sendMail({
-      to: email,
-      subject: "We tried reaching you 📞",
-      html: `<h2>Missed Call</h2>
-             <p>Please fill feedback:</p>
-             <a href="${GOOGLE_FORM_LINK}">Click Here</a>`,
-    });
-
-    console.log("✅ Missed-call email sent");
-  }
-
-  else if (callWasCompleted) {
-    await sendMail({
-      to: email,
-      subject: "Thank you for your feedback 🙏",
-      html: `<h2>Thanks ${user_name || "Customer"}</h2>
-             <p>We appreciate your feedback.</p>
-             <a href="${GOOGLE_FORM_LINK}">Give More Feedback</a>`,
-    });
-
-    console.log("✅ Completed-call email sent");
-  }
-
-  else {
-    console.log("ℹ️ Email skipped due to status:", callStatus);
-  }
-
-} catch (mailErr) {
-  console.error("❌ Email ERROR:", mailErr.message);
-
- return res.status(500).json({
-  success: false,
-  error: mailErr.message,
-});
-}
-    // ───────────────────────────────────────────────────────────────────────────
-
+    // ─── FINAL RESPONSE ─────────────────────────────
     res.status(200).json({
       success: true,
-      message: "Salesforce Case created, WhatsApp & Email processed",
-      salesforceResponse: sfResponse.data,
+      message: "Process completed",
+      salesforce: sfResponse ? "Success" : "Failed",
+      email: "Sent",
     });
 
   } catch (error) {
     console.error("❌ Webhook error:", error.response?.data || error.message);
+
     res.status(500).json({
       success: false,
-      error: error.response?.data || error.message,
+      error: error.message,
     });
   }
 });
