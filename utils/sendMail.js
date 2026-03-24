@@ -18,15 +18,15 @@ async function sendMail({ to, subject, html }) {
     });
 
     if (error) {
-      console.error("❌ Resend error:", error);
-      throw new Error(JSON.stringify(error));
-    }
+  console.error("❌ Resend error:", JSON.stringify(error, null, 2));
+  throw new Error(JSON.stringify(error));
+}
 
     console.log("✅ Email sent:", data?.id);
     return data;
 
   } catch (err) {
-    console.error("❌ FULL ERROR:", err);
+   console.error("❌ FULL ERROR:", JSON.stringify(err, null, 2));
     throw err;
   }
 }

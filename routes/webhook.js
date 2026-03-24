@@ -319,10 +319,10 @@ try {
 } catch (mailErr) {
   console.error("❌ Email ERROR:", mailErr.message);
 
-  return res.status(500).json({
-    success: false,
-    error: "Email sending failed",
-  });
+ return res.status(500).json({
+  success: false,
+  error: mailErr.message,
+});
 }
     // ───────────────────────────────────────────────────────────────────────────
 
