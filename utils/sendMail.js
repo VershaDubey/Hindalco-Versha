@@ -1,15 +1,22 @@
 const nodemailer = require("nodemailer");
 const dns = require("dns");
 
-// 🔥 FORCE IPV4
+// ✅ force IPv4
 dns.setDefaultResultOrder("ipv4first");
 
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false, // TLS
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  tls: {
+    rejectUnauthorized: false,
+  },
+  family: 4, // 🔥 force IPv4 (important)
+  connectionTimeout: 10000, // 10 sec
 });
 
 async function sendMail({ to, subject, html, userName, rating }) {
@@ -23,12 +30,10 @@ async function sendMail({ to, subject, html, userName, rating }) {
       html,
 
       text: `Hi ${userName},
-
-Thank you for your feedback.
-
+      
 Rating: ${rating}/5
-
-Regards,
+      
+Thanks,
 Team Hindalco`,
 
       replyTo: process.env.EMAIL_USER,
