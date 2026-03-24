@@ -32,31 +32,29 @@ function resolveEmail(rawEmail, spokenToEmailFn) {
 // ─── SALESFORCE TOKEN ───────────────────────────────
 
 async function getSalesforceToken() {
-  const params = new URLSearchParams({
+  const qs = require("qs");
+
+  const data = qs.stringify({
     grant_type: "password",
     client_id: process.env.SALESFORCE_CLIENT_ID,
     client_secret: process.env.SALESFORCE_CLIENT_SECRET,
     username: process.env.SALESFORCE_USERNAME,
-   password: "Crm@20263qiKUqK6wcO2UlYIBZVoyKHi2",
+    password: process.env.SALESFORCE_PASSWORD,
   });
 
   const resp = await axios.post(
     "https://login.salesforce.com/services/oauth2/token",
-    params.toString(),
+    data,
     {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json", // 🔥 ADD THIS
+        "Accept": "application/json",
       },
-      httpsAgent: agent,
     }
   );
 
-  console.log("✅ TOKEN RESPONSE:", resp.data); // debug
-console.log("SF PARAMS:", {
-  username: process.env.SALESFORCE_USERNAME,
-  passwordLength: process.env.SALESFORCE_PASSWORD?.length,
-});
+  console.log("✅ TOKEN SUCCESS:", resp.data);
+
   return resp.data;
 }
 
