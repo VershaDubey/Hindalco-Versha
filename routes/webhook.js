@@ -78,17 +78,19 @@ router.post("/", async (req, res) => {
     `;
 
     // 🚀 SEND EMAIL
-    await sendMail({
-      to: email,
-      subject: "We Value Your Feedback | Hindalco Premium Aluminium",
-      html: htmlTemplate,
-    });
-
-    res.json({
-      success: true,
-      message: "Email sent successfully",
-    });
-
+  sendMail({
+  to: email,
+  subject: "We Value Your Feedback",
+  html: htmlTemplate,
+  userName,
+  rating,
+})
+.then(() => console.log("✅ Email sent"))
+.catch(err => console.error("❌ Email error:", err.message));
+  return res.json({
+  success: true,
+  message: "Webhook received, email processing in background",
+});
   } catch (err) {
     console.error("❌ Webhook error:", err.message);
 
